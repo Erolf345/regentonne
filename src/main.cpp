@@ -275,6 +275,7 @@ void setup()
 
 void loop()
 {
+  Serial.println("hallo");
   ArduinoOTA.handle();
 
   //MQTT-Handler
