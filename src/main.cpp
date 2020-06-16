@@ -5,7 +5,6 @@
 #include <auth.h>
 #include <PubSubClient.h>
 #include <string.h>
-#include <ArduinoOTA.h>
 
 char ssid[] = SSID;          //  network SSID (supplied in auth.h)
 char pass[] = WIFI_PASSWORD; // network password
@@ -17,6 +16,7 @@ char pass[] = WIFI_PASSWORD; // network password
 #define IRRIGATION_PUMP_CHANNEL 0
 #define TANK_PUMP_CHANNEL 1
 #define BATTERY_PIN 35
+#define MASTER_SENSOR_PIN 27
 
 const char *mqtt_server = "192.168.178.97";
 
@@ -117,35 +117,74 @@ void wasser_ausschalten()
   ledcWrite(IRRIGATION_SWITCH_CHANNEL, 0);
 }
 
+/*
+* Read Barometer and publish values to MQTT
+*/
 void read_baro()
 {
+  digitalWrite(MASTER_SENSOR_PIN, HIGH);
+  delay(3000);
+
+  //Tonne Unten
+  Serial.println("Untere Tonne:");
   tonne_unten.ReadProm();
   tonne_unten.Readout();
 
   double temp = tonne_unten.GetTemp() / 100;
   char tempmes[200];
   sprintf(tempmes, "%2.2f", temp);
-  client.publish("Regentonne/tonne_unten_temp", tempmes);
   Serial.print("Temperature °C: ");
   Serial.println(temp);
+  client.publish("Regentonne/tonne_unten_temp", tempmes);
 
   double pres = tonne_unten.GetPres();
   char presmes[200];
   sprintf(presmes, "%2.0f", pres);
   Serial.print("Pressure [Pa]: ");
+  Serial.println(pres);
   client.publish("Regentonne/tonne_unten", presmes);
 
+    //Tonne Oben
+  Serial.println("Obere Tonne:");
+  tonne_oben.ReadProm();
+  tonne_oben.Readout();
+
+  temp = tonne_oben.GetTemp() / 100;
+  sprintf(tempmes, "%2.2f", temp);
+  Serial.print("Temperature °C: ");
+  Serial.println(temp);
+  client.publish("Regentonne/tonne_oben_temp", tempmes);
+
+  pres = tonne_oben.GetPres();
+  sprintf(presmes, "%2.0f", pres);
+  Serial.print("Pressure [Pa]: ");
   Serial.println(pres);
+  client.publish("Regentonne/tonne_oben", presmes);
 
   Serial.println("---");
   last_update = millis();
+  digitalWrite(MASTER_SENSOR_PIN, LOW);
 }
 
+/*
+* Read battery voltage and update MQTT
+* ESP has 4096 levels of analog Read
+* We dampen the battery signal so the esp is not damaged
+* 
+* Measured: 12.18V at around 2465
+* 
+* 
+*/
 void read_voltage()
 {
-  int voltage = analogRead(BATTERY_PIN);
+  double toVolt = 12.18 / 2465;
+
+  int measuredAnalog = analogRead(BATTERY_PIN);
+
+  double voltage = measuredAnalog * toVolt;
+
   char voltmes[200];
-  sprintf(voltmes, "%2.0d", voltage);
+  sprintf(voltmes, "%.2f", voltage);
   Serial.print("Voltage: ");
   client.publish("Regentonne/battery", voltmes);
   Serial.println(voltmes);
@@ -177,11 +216,6 @@ void callback(char *topic, byte *payload, unsigned int length)
     if (strncmp("OFF", cmnd, length) == 0)
     {
       pumpe_ausschalten();
-    }
-    else
-    {
-      int val = std::atoi(cmnd);
-      pumpe_anschalten();
     }
   }
   else if (strcmp(topic, "Regentonne/cmnd/water") == 0)
@@ -221,15 +255,19 @@ void setup()
   ledcAttachPin(IRRIGATION_PUMP_PIN, IRRIGATION_PUMP_CHANNEL);
   ledcAttachPin(IRRIGATION_SWITCH_PIN, IRRIGATION_SWITCH_CHANNEL);
 
+  //Master Sensor pin
+  pinMode(MASTER_SENSOR_PIN, OUTPUT);
+  digitalWrite(MASTER_SENSOR_PIN, LOW);
+
   //Setup barometers
-  tonne_unten.setI2Caddr(0x77);
+  tonne_unten.setI2Caddr(0x76);
 
   if (tonne_unten.connect() > 0)
   {
     Serial.println("Error connecting to tonne_unten barometer");
   }
 
-  tonne_oben.setI2Caddr(0x76);
+  tonne_oben.setI2Caddr(0x77);
   if (tonne_oben.connect() > 0)
   {
     Serial.println("Error connecting to tonne_oben barometer");
@@ -243,40 +281,10 @@ void setup()
   client.setServer(mqtt_server, 1883);
   reconnect();
   client.setCallback(callback);
-
-  //Setup OTA
-
-  ArduinoOTA
-      .onStart([]() {
-        String type = "sketch";
-        // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-        Serial.println("Start updating " + type);
-      })
-      .onEnd([]() {
-        Serial.println("\nEnd");
-      })
-      .onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-      })
-      .onError([](ota_error_t error) {
-        Serial.printf("Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR)
-          Serial.println("Auth Failed");
-        else if (error == OTA_BEGIN_ERROR)
-          Serial.println("Begin Failed");
-        else if (error == OTA_CONNECT_ERROR)
-          Serial.println("Connect Failed");
-        else if (error == OTA_RECEIVE_ERROR)
-          Serial.println("Receive Failed");
-        else if (error == OTA_END_ERROR)
-          Serial.println("End Failed");
-      });
 }
 
 void loop()
 {
-  Serial.println("hallo");
-  ArduinoOTA.handle();
 
   //MQTT-Handler
   if (!client.connected())
