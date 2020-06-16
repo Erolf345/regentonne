@@ -40,6 +40,7 @@ void connectToNetwork()
 
   while (WiFi.status() != WL_CONNECTED)
   {
+    WiFi.begin(ssid, pass);
     delay(1000);
     Serial.println("Establishing connection to WiFi..");
   }
@@ -177,6 +178,7 @@ void read_baro()
 
 /**
 * @brief Read battery voltage and update MQTT
+* 
 * ESP has 4096 levels of analog Read
 * We dampen the battery signal so the esp is not damaged
 * 
