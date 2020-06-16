@@ -23,8 +23,6 @@ const char *mqtt_server = "192.168.178.97";
 //Baro stuff
 MS5xxx tonne_unten(&Wire);
 MS5xxx tonne_oben(&Wire);
-unsigned long baro_update_interval = 1000 * 60 * 60; //60 minutes
-unsigned long last_update;
 
 // setting PWM properties
 const int pwm_freq = 5000;
@@ -33,6 +31,9 @@ const int pwm_resolution = 8;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+/**
+* @brief Connect to WIFI
+*/
 void connectToNetwork()
 {
   WiFi.begin(ssid, pass);
@@ -46,6 +47,9 @@ void connectToNetwork()
   Serial.println("Connected to network");
 }
 
+/**
+* @brief Reconnect with MQTT service
+*/
 void reconnect()
 {
   // Loop until we're reconnected
@@ -61,9 +65,9 @@ void reconnect()
       // Once connected, publish an announcement...
       //client.publish("Regentonne/log", "hello world");
       // ... and resubscribe
-      client.subscribe("Regentonne/cmnd",1);
-      client.subscribe("Regentonne/cmnd/pump",1);
-      client.subscribe("Regentonne/cmnd/water",1);
+      client.subscribe("Regentonne/cmnd", 1);
+      client.subscribe("Regentonne/cmnd/pump", 1);
+      client.subscribe("Regentonne/cmnd/water", 1);
     }
     else
     {
@@ -89,7 +93,10 @@ void pumpe_ausschalten()
   client.publish("Regentonne/tank_pump", "PUMP OFF");
   ledcWrite(TANK_PUMP_CHANNEL, 0);
 }
-
+/**
+ * @brief activate irrigation
+ * 
+ */
 void wasser_anschalten(int override)
 {
   if (override >= 0 && override <= 255)
@@ -108,6 +115,10 @@ void wasser_anschalten(int override)
   }
 }
 
+/**
+ * @brief disable irrigation
+ * 
+ */
 void wasser_ausschalten()
 {
   Serial.println("Wasser AUSGESCHALTET---------------------------------");
@@ -116,9 +127,10 @@ void wasser_ausschalten()
   ledcWrite(IRRIGATION_SWITCH_CHANNEL, 0);
 }
 
-/*
-* Read Barometer and publish values to MQTT
-*/
+/**
+ * @brief Read Barometer and publish values to MQTT
+ * 
+ */
 void read_baro()
 {
   digitalWrite(MASTER_SENSOR_PIN, HIGH);
@@ -160,17 +172,15 @@ void read_baro()
   client.publish("Regentonne/tonne_oben", presmes);
 
   Serial.println("---");
-  last_update = millis();
   digitalWrite(MASTER_SENSOR_PIN, LOW);
 }
 
-/*
-* Read battery voltage and update MQTT
+/**
+* @brief Read battery voltage and update MQTT
 * ESP has 4096 levels of analog Read
 * We dampen the battery signal so the esp is not damaged
 * 
 * Measured: 12.18V at around 2465
-* 
 * 
 */
 void read_voltage()
@@ -188,7 +198,9 @@ void read_voltage()
   Serial.println(voltmes);
 }
 
-//Callback function for MQTT client
+/**
+* @brief Callback function for MQTT client
+*/
 void callback(char *topic, byte *payload, unsigned int length)
 {
   Serial.print("Command arrived [");
@@ -272,8 +284,6 @@ void setup()
   {
     Serial.println("Error connecting to tonne_oben barometer");
   }
-  read_baro();
-  last_update = millis();
 
   //Setup MQTT
   //TODO: Set behaviour for failed connection
@@ -294,7 +304,6 @@ void loop()
   client.loop();
 
   //Barometer readout
-  //if (last_update + baro_update_interval <= millis())
   read_baro();
   read_voltage();
 
