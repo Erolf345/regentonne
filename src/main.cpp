@@ -16,7 +16,7 @@ char pass[] = WIFI_PASSWORD; // network password
 #define IRRIGATION_PUMP_CHANNEL 0
 #define TANK_PUMP_CHANNEL 1
 #define BATTERY_PIN 35
-#define MASTER_SENSOR_PIN 27
+#define MASTER_SENSOR_PIN 26
 
 const char *mqtt_server = "192.168.178.97";
 
@@ -123,7 +123,6 @@ void wasser_ausschalten()
 void read_baro()
 {
   digitalWrite(MASTER_SENSOR_PIN, HIGH);
-  delay(3000);
 
   //Tonne Unten
   Serial.println("Untere Tonne:");
