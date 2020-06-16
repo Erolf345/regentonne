@@ -53,18 +53,17 @@ void reconnect()
   {
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
+    String clientId = "ESP32-Regentonne";
     // Attempt to connect
-    if (client.connect(clientId.c_str()))
+    if (client.connect(clientId.c_str(), NULL, NULL, 0, 0, 0, 0, 0)) //Persistent session
     {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("Regentonne/log", "hello world");
+      //client.publish("Regentonne/log", "hello world");
       // ... and resubscribe
-      client.subscribe("Regentonne/cmnd");
-      client.subscribe("Regentonne/cmnd/pump");
-      client.subscribe("Regentonne/cmnd/water");
+      client.subscribe("Regentonne/cmnd",1);
+      client.subscribe("Regentonne/cmnd/pump",1);
+      client.subscribe("Regentonne/cmnd/water",1);
     }
     else
     {
@@ -143,7 +142,7 @@ void read_baro()
   Serial.println(pres);
   client.publish("Regentonne/tonne_unten", presmes);
 
-    //Tonne Oben
+  //Tonne Oben
   Serial.println("Obere Tonne:");
   tonne_oben.ReadProm();
   tonne_oben.Readout();
@@ -239,6 +238,8 @@ void callback(char *topic, byte *payload, unsigned int length)
       read_baro();
     if (strncmp("updateBattery", cmnd, length) == 0)
       read_voltage();
+    if (strncmp("ping", cmnd, length) == 0)
+      client.publish("Regentonne/log", "pong");
   }
 }
 
@@ -293,8 +294,9 @@ void loop()
   client.loop();
 
   //Barometer readout
-  if (last_update + baro_update_interval <= millis())
-    read_baro();
+  //if (last_update + baro_update_interval <= millis())
+  read_baro();
+  read_voltage();
 
   delay(500);
 }

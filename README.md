@@ -22,3 +22,9 @@ One pump is used to move water from rain catcher to storage, the other pump is u
 
 Aditionally to the irrigation pump a switch has to be activated before the irrigation hose can be used.
 
+
+
+## Calibration
+
+Battery: Measured 12.18V at around 2465.
+
