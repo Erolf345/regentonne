@@ -9,7 +9,7 @@
 char ssid[] = SSID;          //  network SSID (supplied in auth.h)
 char pass[] = WIFI_PASSWORD; // network password
 
-#define IRRIGATION_SWITCH_PIN 34
+#define IRRIGATION_SWITCH_PIN 17
 #define IRRIGATION_SWITCH_CHANNEL 2
 #define IRRIGATION_PUMP_PIN 32
 #define TANK_PUMP_PIN 33
@@ -66,9 +66,9 @@ void reconnect()
       // Once connected, publish an announcement...
       //client.publish("Regentonne/log", "hello world");
       // ... and resubscribe
-      client.subscribe("Regentonne/cmnd", 1);
       client.subscribe("Regentonne/cmnd/pump", 1);
       client.subscribe("Regentonne/cmnd/water", 1);
+      client.subscribe("Regentonne/cmnd", 1);
     }
     else
     {
@@ -102,14 +102,15 @@ void wasser_anschalten(int override)
 {
   if (override >= 0 && override <= 255)
   {
-    Serial.println("Wasser ANGESCHALTET---------------------------------");
+    Serial.print("Wasser ANGESCHALTET Mit Schalterwert: ");
+    Serial.println(override);
     client.publish("Regentonne/water", "WATER ON");
     ledcWrite(IRRIGATION_PUMP_CHANNEL, 252);
     ledcWrite(IRRIGATION_SWITCH_CHANNEL, override);
   }
   else
   {
-    Serial.println("Wasser ANGESCHALTET---------------------------------");
+    Serial.println("Wasser ANGESCHALTET mit Schalterwert 252");
     client.publish("Regentonne/water", "WATER ON");
     ledcWrite(IRRIGATION_PUMP_CHANNEL, 252);
     ledcWrite(IRRIGATION_SWITCH_CHANNEL, 252);
@@ -135,7 +136,7 @@ void wasser_ausschalten()
 void read_baro()
 {
   digitalWrite(MASTER_SENSOR_PIN, HIGH);
-
+  delay(100);
   //Tonne Unten
   Serial.println("Untere Tonne:");
   tonne_unten.ReadProm();
@@ -143,14 +144,16 @@ void read_baro()
 
   double temp = tonne_unten.GetTemp() / 100;
   char tempmes[200];
-  sprintf(tempmes, "%2.2f", temp);
+  sprintf(tempmes, "%.2f", temp);
   Serial.print("Temperature °C: ");
   Serial.println(temp);
   client.publish("Regentonne/tonne_unten_temp", tempmes);
 
   double pres = tonne_unten.GetPres();
+  pres = pres - 194564;  //Subtract calibrated value
+  pres = pres / 9806.65; //Convert to water meter
   char presmes[200];
-  sprintf(presmes, "%2.0f", pres);
+  sprintf(presmes, "%.2f", pres);
   Serial.print("Pressure [Pa]: ");
   Serial.println(pres);
   client.publish("Regentonne/tonne_unten", presmes);
@@ -161,13 +164,15 @@ void read_baro()
   tonne_oben.Readout();
 
   temp = tonne_oben.GetTemp() / 100;
-  sprintf(tempmes, "%2.2f", temp);
+  sprintf(tempmes, "%.2f", temp);
   Serial.print("Temperature °C: ");
   Serial.println(temp);
   client.publish("Regentonne/tonne_oben_temp", tempmes);
 
   pres = tonne_oben.GetPres();
-  sprintf(presmes, "%2.0f", pres);
+  pres = pres - 190040;  //Subtract calibrated value
+  pres = pres / 9806.65; //Convert to water meter
+  sprintf(presmes, "%.2f", pres);
   Serial.print("Pressure [Pa]: ");
   Serial.println(pres);
   client.publish("Regentonne/tonne_oben", presmes);
