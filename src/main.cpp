@@ -31,6 +31,9 @@ const int pwm_resolution = 8;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+// convert raw measured value to Volt * Measured: 12.18V at around 2465
+double toVolt = 12.18 / 2465;
+
 /**
 * @brief Connect to WIFI
 */
@@ -149,10 +152,12 @@ void read_baro()
   Serial.println(temp);
   client.publish("Regentonne/tonne_unten_temp", tempmes);
 
-  double pres = tonne_unten.GetPres();
-  pres = pres - 194564;  //Subtract calibrated value
-  pres = pres / 9806.65; //Convert to water meter
   char presmes[200];
+  double pres = tonne_unten.GetPres();
+  sprintf(presmes, "%.0f", pres);
+  client.publish("Regentonne/tonne_unten/pascal", presmes);
+  pres = pres - 194564.0; //Subtract calibrated value (at BME = 950hPa)
+  pres = pres / 9806.65;  //Convert to water meter
   sprintf(presmes, "%.2f", pres);
   Serial.print("Pressure [Pa]: ");
   Serial.println(pres);
@@ -170,7 +175,9 @@ void read_baro()
   client.publish("Regentonne/tonne_oben_temp", tempmes);
 
   pres = tonne_oben.GetPres();
-  pres = pres - 190040;  //Subtract calibrated value
+  sprintf(presmes, "%.0f", pres);
+  client.publish("Regentonne/tonne_oben/pascal", presmes);
+  pres = pres - 190040;  //Subtract calibrated value (at BME = 950hPa)
   pres = pres / 9806.65; //Convert to water meter
   sprintf(presmes, "%.2f", pres);
   Serial.print("Pressure [Pa]: ");
@@ -187,13 +194,10 @@ void read_baro()
 * ESP has 4096 levels of analog Read
 * We dampen the battery signal so the esp is not damaged
 * 
-* Measured: 12.18V at around 2465
 * 
 */
 void read_voltage()
 {
-  double toVolt = 12.18 / 2465;
-
   int measuredAnalog = analogRead(BATTERY_PIN);
 
   double voltage = measuredAnalog * toVolt;
@@ -203,6 +207,34 @@ void read_voltage()
   Serial.print("Voltage: ");
   client.publish("Regentonne/battery", voltmes);
   Serial.println(voltmes);
+}
+/**
+ * @brief puts ESP into deepsleep if battery is under certain Voltage
+ * 
+ */
+void batteryFailsafe()
+{
+  int measuredAnalog = 0;
+  double voltage;
+
+  for (int i = 0; i < 5; i++)
+  {
+    measuredAnalog += analogRead(BATTERY_PIN);
+    delay(10);
+  }
+  measuredAnalog = measuredAnalog / 5;
+  voltage = measuredAnalog * toVolt;
+  if (voltage < 9.5)
+  {
+    Serial.print("Measured Battery Voltage ");
+    Serial.print(voltage);
+    Serial.println("V < 9.5V");
+    Serial.println("Sleeping for 2 hours!");
+    digitalWrite(MASTER_SENSOR_PIN, LOW); //Turn off sensor master pin
+    pumpe_ausschalten();                  //Turn off pump
+    wasser_ausschalten();                 //Turn off irrigation
+    ESP.deepSleep(1000 * 60 * 60 * 2);    //sleep for 2 hours
+  }
 }
 
 /**
@@ -264,6 +296,9 @@ void callback(char *topic, byte *payload, unsigned int length)
 
 void setup()
 {
+  //Check if battery has enough voltage to proceed
+  batteryFailsafe();
+
   Serial.begin(115200);
 
   //Setup PWM Parameters
@@ -302,6 +337,8 @@ void setup()
 
 void loop()
 {
+  //Check if battery has enough voltage to proceed
+  batteryFailsafe();
 
   //MQTT-Handler
   if (!client.connected())
